@@ -6,49 +6,74 @@ import pandas as pd
 import os
 import gdown
 import zipfile
+import shutil
 
 # --- KONFIGURASI GOOGLE DRIVE---
 GDRIVE_FILE_ID = '1dm4itYOqcgtQ-dJyOVvmz32s7gYFhtv7' 
 
 st.set_page_config(page_title="NER LAPORGUB JATENG", layout="wide")
 
-# --- FUNGSI DOWNLOAD MODEL DARI DRIVE ---
+# --- FUNGSI DOWNLOAD MODEL ---
 @st.cache_resource
 def download_and_load_model():
     model_folder = "model_finetuned"
-    zip_file = "model_finetuned.zip"
+    zip_filename = "model_finetuned.zip"
     
-    # Cek apakah model sudah ada, jika belum, download
+    # Cek apakah folder model sudah ada dan lengkap
     if not os.path.exists(model_folder):
-        st.info("Sedang mengunduh model dari server (Proses ini hanya sekali)...")
-        try:
-            # Download dari Google Drive
-            url = f'https://drive.google.com/uc?id={GDRIVE_FILE_ID}'
-            gdown.download(url, zip_file, quiet=False)
+        st.warning("Model belum ditemukan. Sedang memulai proses download...")
+        
+        # Hapus file zip sisa jika ada (takutnya file corrupt dari percobaan sebelumnya)
+        if os.path.exists(zip_filename):
+            os.remove(zip_filename)
             
-            # Extract Zip
-            with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+        try:
+            # Download dengan parameter fuzzy=True untuk bypass virus warning
+            # Menggunakan ID langsung lebih stabil daripada URL
+            output = gdown.download(id=GDRIVE_FILE_ID, output=zip_filename, quiet=False, fuzzy=True)
+            
+            if not output:
+                st.error("Gagal download. Pastikan ID benar dan File di Google Drive sudah 'Anyone with the link'.")
+                return None
+            
+            # Cek ukuran file (jika < 10KB kemungkinan yang terdownload file HTML error)
+            file_size = os.path.getsize(zip_filename)
+            if file_size < 10000: # 10KB
+                st.error(f"File terlalu kecil ({file_size} bytes). Kemungkinan Permission Denied atau salah ID.")
+                return None
+
+            st.info("Sedang mengekstrak file model...")
+            with zipfile.ZipFile(zip_filename, 'r') as zip_ref:
                 zip_ref.extractall(".")
             
-            st.success("Model berhasil diunduh dan diekstrak!")
+            st.success("Model berhasil disiapkan!")
+            
+            # Bersihkan file zip untuk hemat storage
+            if os.path.exists(zip_filename):
+                os.remove(zip_filename)
+                
         except Exception as e:
-            st.error(f"Gagal mendownload model: {e}")
+            st.error(f"Terjadi kesalahan saat download/extract: {e}")
             return None
 
-    # Load Model setelah file tersedia
+    # Load Model
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_folder)
         model = TFAutoModelForTokenClassification.from_pretrained(model_folder)
         nlp = pipeline("ner", model=model, tokenizer=tokenizer, aggregation_strategy="simple")
         return nlp
     except Exception as e:
-        st.error(f"Error memuat model: {e}")
+        st.error(f"Gagal memuat model ke memori: {e}")
+        # Hapus folder jika gagal load, supaya next run dia download ulang yang benar
+        if os.path.exists(model_folder):
+            shutil.rmtree(model_folder)
         return None
 
 # --- LOAD MODEL ---
-nlp_pipeline = download_and_load_model()
+with st.spinner('Menyiapkan Model AI... (Proses pertama kali butuh waktu 1-2 menit)'):
+    nlp_pipeline = download_and_load_model()
 
-# --- FUNGSI CLEANING (SAMA SEPERTI SEBELUMNYA) ---
+# --- FUNGSI CLEANING ---
 def clean_text(text):
     text = str(text).strip()
     text = re.sub(r"http\S+|www\S+", "", text)
@@ -61,31 +86,66 @@ def clean_text(text):
 
 # --- TAMPILAN UI ---
 with st.sidebar:
-    st.header("Informasi Model")
-    st.markdown("""
-    **Arsitektur:** IndoBERT-NER
-    **Status:** Siap Digunakan
-    """)
+    st.header("Status Sistem")
+    if nlp_pipeline:
+        st.success("Model Aktif")
+    else:
+        st.error("Model Offline")
+    
+    st.markdown("---")
+    st.markdown("**Panduan:**")
+    st.markdown("1. Masukkan teks berita/laporan.")
+    st.markdown("2. Klik tombol proses.")
+    st.markdown("3. Sistem akan mendeteksi lokasi.")
 
 st.title("Sistem Deteksi Entitas Bernama (NER)")
-st.subheader("Demo Skripsi - Ekstraksi Lokasi")
+st.subheader("Demo Skripsi - Ekstraksi Lokasi (Jawa Tengah)")
 st.markdown("---")
 
-input_text = st.text_area("Masukkan teks laporan:", height=150, placeholder="Contoh: Jalan rusak di Desa Karanganyar...")
+input_text = st.text_area("Masukkan teks laporan:", height=150, placeholder="Contoh: Jalan rusak di Desa Karanganyar Kabupaten Pekalongan sangat parah...")
 
-if st.button("Proses Ekstraksi"):
-    if input_text and nlp_pipeline:
-        cleaned_text = clean_text(input_text)
-        with st.spinner("Menganalisis teks..."):
-            results = nlp_pipeline(cleaned_text)
-            
-        if results:
-            st.success("Entitas ditemukan:")
-            data_hasil = [{"Entitas": e['word'], "Label": e['entity_group'], "Score": f"{e['score']:.2f}"} for e in results]
-            st.table(pd.DataFrame(data_hasil))
-        else:
-            st.info("Tidak ada entitas lokasi terdeteksi.")
+if st.button("Proses Ekstraksi", type="primary"):
+    if not nlp_pipeline:
+        st.error("Model tidak siap. Silakan Refresh halaman atau cek koneksi.")
     elif not input_text:
-        st.warning("Masukkan teks dulu.")
-    elif not nlp_pipeline:
-        st.error("Model belum siap.")
+        st.warning("Mohon masukkan teks terlebih dahulu.")
+    else:
+        cleaned_text = clean_text(input_text)
+        
+        # Progress bar visual
+        my_bar = st.progress(0, text="Sedang memproses...")
+        results = nlp_pipeline(cleaned_text)
+        my_bar.progress(100, text="Selesai!")
+        
+        if results:
+            st.success(f"Ditemukan {len(results)} entitas:")
+            
+            # Format Data
+            data_hasil = []
+            for e in results:
+                data_hasil.append({
+                    "Entitas": e['word'],
+                    "Tipe Lokasi": e['entity_group'],
+                    "Keyakinan (Score)": f"{e['score']:.2%}"
+                })
+            
+            # Tampilkan Tabel
+            st.table(pd.DataFrame(data_hasil))
+            
+            # Visualisasi Highlight Text
+            html_text = cleaned_text
+            results_sorted = sorted(results, key=lambda x: x['start'], reverse=True)
+            
+            for ent in results_sorted:
+                start, end = ent['start'], ent['end']
+                label = ent['entity_group']
+                word = cleaned_text[start:end]
+                # Styling yang rapi tanpa emoji
+                highlight = f'<span style="background-color: #d1ecf1; color: #0c5460; padding: 2px 5px; border-radius: 4px; font-weight: bold;">{word} <span style="font-size: 0.8em; opacity: 0.7;">[{label}]</span></span>'
+                html_text = html_text[:start] + highlight + html_text[end:]
+            
+            st.markdown("### Visualisasi Konteks:")
+            st.markdown(f'<div style="padding:15px; border:1px solid #ddd; border-radius:5px; line-height:1.6;">{html_text}</div>', unsafe_allow_html=True)
+            
+        else:
+            st.info("Sistem tidak menemukan entitas lokasi pada teks tersebut.")
