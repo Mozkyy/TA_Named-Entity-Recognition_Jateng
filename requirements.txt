@@ -1,1 +1,7 @@
 streamlit
+tensorflow
+transformers
+numpy
+pandas
+nltk
+gdown
