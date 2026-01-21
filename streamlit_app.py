@@ -16,8 +16,8 @@ st.set_page_config(page_title="NER LAPORGUB JATENG", layout="wide")
 # --- FUNGSI DOWNLOAD MODEL ---
 @st.cache_resource
 def download_and_load_model():
-    model_folder = "model_finetuned"
-    zip_filename = "model_finetuned.zip"
+    model_folder = "Models"
+    zip_filename = "indober-ner-jateng-finetuned-20260121T152219Z-3-001.zip"
     
     # Cek apakah folder model sudah ada dan lengkap
     if not os.path.exists(model_folder):
