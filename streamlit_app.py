@@ -10,7 +10,8 @@ st.set_page_config(page_title="NER LAPORGUB JATENG", layout="wide")
 @st.cache_resource
 def download_and_load_model():
     try:
-        model_name = "Mozkyy/ner-laporgub-jateng" 
+        # Nama repository sesuai screenshot
+        model_name = "Mozkyy/ner-laporgub-jateng"
         
         st.info(f"Memuat model dari Hugging Face: {model_name}")
         
@@ -58,8 +59,8 @@ with st.sidebar:
     st.markdown("2. Klik tombol proses.")
     st.markdown("3. Sistem akan mendeteksi lokasi.")
 
-st.title("Sistem Deteksi Entitas Bernama (NER)")
-st.subheader("Demo Skripsi - Ekstraksi Lokasi (Jawa Tengah)")
+st.title("Sistem Deteksi Entitas Bernama (Named Entity Recognition)")
+st.subheader("Ekstraksi Lokasi Pada Laporgub Jateng")
 st.markdown("---")
 
 input_text = st.text_area(
