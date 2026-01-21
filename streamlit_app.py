@@ -102,7 +102,7 @@ st.title("Sistem Deteksi Entitas Bernama (NER)")
 st.subheader("Demo Skripsi - Ekstraksi Lokasi (Jawa Tengah)")
 st.markdown("---")
 
-input_text = st.text_area("Masukkan teks laporan:", height=150, placeholder="Contoh: Jalan rusak di Desa Karanganyar Kabupaten Pekalongan sangat parah...")
+input_text = st.text_area("Masukkan teks laporan:", height=150, placeholder="Contoh: Jalan rusak di Desa Karanganyar Kabupaten Demak sangat parah...")
 
 if st.button("Proses Ekstraksi", type="primary"):
     if not nlp_pipeline:
